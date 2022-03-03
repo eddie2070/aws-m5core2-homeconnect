@@ -58,7 +58,8 @@ Audio audio;
 
 // The MQTT topics that this device should publish/subscribe
 #define AWS_IOT_PUBLISH_TOPIC   "esp32/pub"
-#define AWS_IOT_SUBSCRIBE_TOPIC "sensor/wyeth/temp1"
+#define AWS_IOT_SUBSCRIBE_TOPIC "sensor/wyeth/#"
+//#define AWS_IOT_SUBSCRIBE_TOPIC "sensor/wyeth/temp1"
 
 WiFiClientSecure net = WiFiClientSecure();
 MQTTClient client = MQTTClient(256);
@@ -84,9 +85,11 @@ unsigned int data[6];
 int sleeping = 0;
 
 void messageHandler(String &topic, String &payload) {
-  Serial.println("incoming: " + topic + " - " + payload);
+  M5.Rtc.GetTime(&TimeStruct);
+  Serial.println("incoming:" + topic + " - " + payload);
   Serial.println("incoming: " + payload);
 
+if (topic == "sensor/wyeth/temp1"){
   StaticJsonDocument<200> filter;
   filter["temperature"] = true;
 
@@ -105,6 +108,27 @@ void messageHandler(String &topic, String &payload) {
   M5.Lcd.setTextSize(1); 
   M5.Lcd.setCursor(200, 12);
   M5.Lcd.printf("temp: %.2f at %02d:%02d",temperature,TimeStruct.Hours, TimeStruct.Minutes);
+} else if ( topic == "sensor/wyeth/temp1/ext" ) {
+  StaticJsonDocument<200> filter;
+  filter["dark_temperature"] = true;
+
+  //StaticJsonDocument<400> doc;
+  //deserializeJson(doc, payload, DeserializationOption::Filter(filter));
+  //const char* message = doc["message"];
+  //Serial.println(payload);
+  //serializeJsonPretty(doc, Serial);
+
+  StaticJsonDocument<100> doc;
+  deserializeJson(doc, payload, DeserializationOption::Filter(filter));
+  float dark_temperature = doc["dark_temperature"];
+  Serial.println(dark_temperature);
+
+
+  M5.Lcd.setTextSize(1); 
+  M5.Lcd.setCursor(200, 24);
+  M5.Lcd.printf("temp ext: %.2f",dark_temperature);
+}
+  
 
   sleeping = 1;
   /*
@@ -197,6 +221,7 @@ void setup() {
     M5.IMU.Init();
 
     FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);  // GRB ordering is assumed
+    FastLED.setBrightness(20);
 
   //Set Date
     //M5.Rtc.begin();  //Initialize the RTC clock.
@@ -365,7 +390,7 @@ M5.IMU.getTempData(&temperature);
 
   M5.Lcd.setTextSize(2); 
   M5.Lcd.setCursor(0, 210);
-  M5.Lcd.printf("temp: %.1f | humid: %.1f",cTemp, pHumid);
+  M5.Lcd.printf("temp: %.1f | humid: %.1f%%",cTemp, pHumid);
 
   M5.Lcd.setTextSize(10);
   char mystring[10]; // Space for 9 characters + null termination
@@ -374,6 +399,11 @@ M5.IMU.getTempData(&temperature);
 
   M5.Lcd.setTextSize(1); 
   M5.Rtc.GetTime(&TimeStruct);
+  if (TimeStruct.Minutes==00 && TimeStruct.Seconds==00) {
+    Serial.println("It is o'clock");
+    //ESP.restart();
+    //connectAWS();
+  }
   M5.Lcd.setCursor(0, 11);
   M5.Lcd.printf("Time: %02d:%02d:%02d",TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds);
   float batVoltage = M5.Axp.GetBatVoltage();
@@ -391,7 +421,7 @@ M5.IMU.getTempData(&temperature);
   M5.update(); //Read the press state of the key.  读取按键 A, B, C 的状态
   if (M5.BtnA.wasReleased() || cur_value1 != last_value1) {
     M5.Lcd.setTextSize(1);
-    M5.Lcd.setCursor(200, 24);
+    M5.Lcd.setCursor(200, 36);
     if (cur_value1==0){
       Serial.printf("button1 pressed : %d\n", cur_value1);
       M5.Lcd.print("Start servo");
@@ -403,9 +433,9 @@ M5.IMU.getTempData(&temperature);
         delay(100);
       }
       ledcDetachPin(26);
-      M5.Lcd.setCursor(200, 24);
+      M5.Lcd.setCursor(200, 36);
       M5.Lcd.print("               ");
-      M5.Lcd.setCursor(200, 24);
+      M5.Lcd.setCursor(200, 36);
       M5.Lcd.print("Stop servo");
       pinMode(26, INPUT);
     } else {
@@ -414,7 +444,7 @@ M5.IMU.getTempData(&temperature);
     last_value1 = cur_value1;
   } else if (M5.BtnB.wasReleased() || cur_value2 != last_value2 ) {
     M5.Lcd.setTextSize(1);
-    M5.Lcd.setCursor(200, 24);
+    M5.Lcd.setCursor(200, 36);
     if (cur_value2==0){
       Serial.printf("button2 pressed : %d\n", cur_value2);
       M5.Lcd.print("Start rev-servo");
@@ -426,9 +456,9 @@ M5.IMU.getTempData(&temperature);
       delay(100);
     }
     ledcDetachPin(26);
-    M5.Lcd.setCursor(200, 24);
+    M5.Lcd.setCursor(200, 36);
     M5.Lcd.print("                ");
-    M5.Lcd.setCursor(200, 24);
+    M5.Lcd.setCursor(200, 36);
     M5.Lcd.print("Stop servo");
     pinMode(26, INPUT);
     } else {
@@ -436,9 +466,9 @@ M5.IMU.getTempData(&temperature);
     }
     last_value2 = cur_value2;
   } else if (M5.BtnC.wasReleased()) { // || M5.BtnC.pressedFor(1000, 200)) {
-    M5.Lcd.setCursor(200, 24);
+    M5.Lcd.setCursor(200, 36);
     M5.Lcd.print("           ");
-    M5.Lcd.setCursor(200, 24);
+    M5.Lcd.setCursor(200, 36);
     M5.Lcd.print("Playing music");
     audio.setVolume(21); // 0...21
     int incr = 0;
@@ -456,8 +486,8 @@ M5.IMU.getTempData(&temperature);
     audio.stopSong();
     audio.reset();
     audio.connecttoFS(SD, "Bruno.wav");
-    M5.Lcd.setCursor(200, 24);
-    M5.Lcd.print("           ");
+    M5.Lcd.setCursor(200, 36);
+    M5.Lcd.print("              ");
   } else if (M5.BtnB.wasReleasefor(700)) {
     //M5.Lcd.clear(WHITE);  // Clear the screen and set white to the background color.  清空屏幕并将白色设置为底色
     M5.Lcd.setCursor(0, 0);

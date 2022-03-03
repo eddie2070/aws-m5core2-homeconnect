@@ -1,7 +1,7 @@
 #include <pgmspace.h>
 
 #define SECRET
-#define THINGNAME "m5stack-ek-thermo"
+#define THINGNAME "m5stack-ek-thermo2"
 
 const char WIFI_SSID[] = "Maison";
 const char WIFI_PASSWORD[] = "coucoulesamis";
